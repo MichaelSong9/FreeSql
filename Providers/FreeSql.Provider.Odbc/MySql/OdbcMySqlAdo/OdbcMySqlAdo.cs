@@ -41,8 +41,10 @@ namespace FreeSql.Odbc.MySql
 
             if (param is bool || param is bool?)
                 return (bool)param ? 1 : 0;
-            else if (param is string || param is char)
+            else if (param is string)
                 return string.Concat("'", param.ToString().Replace("'", "''").Replace("\\", "\\\\"), "'"); //只有 mysql 需要处理反斜杠
+            else if (param is char)
+                return string.Concat("'", param.ToString().Replace("'", "''").Replace("\\", "\\\\").Replace('\0', ' '), "'");
             else if (param is Enum)
                 return string.Concat("'", param.ToString().Replace("'", "''").Replace("\\", "\\\\"), "'"); //((Enum)val).ToInt64();
             else if (decimal.TryParse(string.Concat(param), out var trydec))
@@ -59,18 +61,18 @@ namespace FreeSql.Odbc.MySql
             return string.Concat("'", param.ToString().Replace("'", "''").Replace("\\", "\\\\"), "'");
         }
 
-        protected override DbCommand CreateCommand()
+        public override DbCommand CreateCommand()
         {
             return new OdbcCommand();
         }
 
-        protected override void ReturnConnection(IObjectPool<DbConnection> pool, Object<DbConnection> conn, Exception ex)
+        public override void ReturnConnection(IObjectPool<DbConnection> pool, Object<DbConnection> conn, Exception ex)
         {
             var rawPool = pool as OdbcMySqlConnectionPool;
             if (rawPool != null) rawPool.Return(conn, ex);
             else pool.Return(conn);
         }
 
-        protected override DbParameter[] GetDbParamtersByObject(string sql, object obj) => _util.GetDbParamtersByObject(sql, obj);
+        public override DbParameter[] GetDbParamtersByObject(string sql, object obj) => _util.GetDbParamtersByObject(sql, obj);
     }
 }

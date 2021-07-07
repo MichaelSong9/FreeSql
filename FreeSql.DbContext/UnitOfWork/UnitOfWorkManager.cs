@@ -13,7 +13,8 @@ namespace FreeSql
     /// </summary>
     public class UnitOfWorkManager : IDisposable
     {
-        DbContextScopedFreeSql _ormScoped;
+        internal DbContextScopedFreeSql _ormScoped;
+        internal IFreeSql OrmOriginal => _ormScoped?._originalFsql;
         public IFreeSql Orm => _ormScoped;
         List<UowInfo> _rawUows = new List<UowInfo>();
         List<UowInfo> _allUows = new List<UowInfo>();
@@ -85,11 +86,11 @@ namespace FreeSql
         /// <param name="propagation">事务传播方式</param>
         /// <param name="isolationLevel">事务隔离级别</param>
         /// <returns></returns>
-        public IUnitOfWork Begin(Propagation propagation = Propagation.Requierd, IsolationLevel? isolationLevel = null)
+        public IUnitOfWork Begin(Propagation propagation = Propagation.Required, IsolationLevel? isolationLevel = null)
         {
             switch (propagation)
             {
-                case Propagation.Requierd: return FindedUowCreateVirtual() ?? CreateUow(isolationLevel);
+                case Propagation.Required: return FindedUowCreateVirtual() ?? CreateUow(isolationLevel);
                 case Propagation.Supports: return FindedUowCreateVirtual() ?? CreateUowNothing(_allUows.LastOrDefault()?.IsNotSupported ?? false);
                 case Propagation.Mandatory: return FindedUowCreateVirtual() ?? throw new Exception("Propagation_Mandatory: 使用当前事务，如果没有当前事务，就抛出异常");
                 case Propagation.NotSupported: return CreateUowNothing(true);
@@ -136,7 +137,7 @@ namespace FreeSql
         }
         IUnitOfWork CreateUow(IsolationLevel? isolationLevel)
         {
-            var uow = new UnitOfWorkOrginal(new UnitOfWork(Orm));
+            var uow = new UnitOfWorkOrginal(new UnitOfWork(OrmOriginal));
             var uowInfo = new UowInfo(uow, UowInfo.UowType.Orginal, false);
             if (isolationLevel != null) uow.IsolationLevel = isolationLevel.Value;
             try { uow.GetOrBeginTransaction(); }
@@ -188,10 +189,6 @@ namespace FreeSql
             public IsolationLevel? IsolationLevel { get => _baseUow.IsolationLevel; set => _baseUow.IsolationLevel = value; }
             public DbContext.EntityChangeReport EntityChangeReport => _baseUow.EntityChangeReport;
 
-            public bool Enable => _baseUow.Enable;
-            public void Close() => _baseUow.Close();
-            public void Open() => _baseUow.Open();
-
             public DbTransaction GetOrBeginTransaction(bool isCreate = true) => _baseUow.GetOrBeginTransaction(isCreate);
             public void Commit() => _baseUow.Commit();
             public void Rollback() => _baseUow.Rollback();
@@ -210,10 +207,6 @@ namespace FreeSql
             public IsolationLevel? IsolationLevel { get => _baseUow.IsolationLevel; set { } }
             public DbContext.EntityChangeReport EntityChangeReport => _baseUow.EntityChangeReport;
 
-            public bool Enable => _baseUow.Enable;
-            public void Close() => _baseUow.Close();
-            public void Open() => _baseUow.Open();
-
             public DbTransaction GetOrBeginTransaction(bool isCreate = true) => _baseUow.GetOrBeginTransaction(isCreate);
             public void Commit() { }
             public void Rollback() => _baseUow.Rollback();
@@ -227,10 +220,6 @@ namespace FreeSql
             public IFreeSql Orm => _fsql;
             public IsolationLevel? IsolationLevel { get; set; }
             public DbContext.EntityChangeReport EntityChangeReport { get; } = new DbContext.EntityChangeReport();
-
-            public bool Enable { get; }
-            public void Close() { }
-            public void Open() { }
 
             public DbTransaction GetOrBeginTransaction(bool isCreate = true) => null;
             public void Commit()
@@ -252,7 +241,7 @@ namespace FreeSql
         /// <summary>
         /// 如果当前没有事务，就新建一个事务，如果已存在一个事务中，加入到这个事务中，默认的选择。
         /// </summary>
-        Requierd,
+        Required,
         /// <summary>
         /// 支持当前事务，如果没有当前事务，就以非事务方法执行。
         /// </summary>

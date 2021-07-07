@@ -58,6 +58,12 @@ namespace FreeSql
         EventHandler<Aop.AuditValueEventArgs> AuditValueHandler { get; }
 
         /// <summary>
+        /// ADO.NET DataReader 拦截
+        /// </summary>
+        event EventHandler<Aop.AuditDataReaderEventArgs> AuditDataReader;
+        EventHandler<Aop.AuditDataReaderEventArgs> AuditDataReaderHandler { get; }
+
+        /// <summary>
         /// 监视数据库命令对象(执行前，调试)
         /// </summary>
         event EventHandler<Aop.CommandBeforeEventArgs> CommandBefore;
@@ -159,11 +165,11 @@ namespace FreeSql.Aop
     public class CurdBeforeEventArgs : EventArgs
     {
         public CurdBeforeEventArgs(Type entityType, TableInfo table, CurdType curdType, string sql, DbParameter[] dbParms) :
-            this(Guid.NewGuid(), new Stopwatch(), entityType, table, curdType, sql, dbParms)
+            this(Guid.NewGuid(), new Stopwatch(), entityType, table, curdType, sql, dbParms, new Dictionary<string, object>())
         {
             this.Stopwatch.Start();
         }
-        protected CurdBeforeEventArgs(Guid identifier, Stopwatch stopwatch, Type entityType, TableInfo table, CurdType curdType, string sql, DbParameter[] dbParms)
+        protected CurdBeforeEventArgs(Guid identifier, Stopwatch stopwatch, Type entityType, TableInfo table, CurdType curdType, string sql, DbParameter[] dbParms, Dictionary<string, object> states)
         {
             this.Identifier = identifier;
             this.Stopwatch = stopwatch;
@@ -172,6 +178,7 @@ namespace FreeSql.Aop
             this.CurdType = curdType;
             this.Sql = sql;
             this.DbParms = dbParms;
+            this.States = states;
         }
 
         /// <summary>
@@ -200,12 +207,16 @@ namespace FreeSql.Aop
         /// 参数化命令
         /// </summary>
         public DbParameter[] DbParms { get; }
+        /// <summary>
+        /// 状态数据，可与 CurdAfter 共享
+        /// </summary>
+        public Dictionary<string, object> States { get; protected set; }
     }
     public enum CurdType { Select, Delete, Update, Insert, InsertOrUpdate }
     public class CurdAfterEventArgs : CurdBeforeEventArgs
     {
         public CurdAfterEventArgs(CurdBeforeEventArgs before, Exception exception, object executeResult) :
-            base(before.Identifier, before.StopwatchInternal, before.EntityType, before.Table, before.CurdType, before.Sql, before.DbParms)
+            base(before.Identifier, before.StopwatchInternal, before.EntityType, before.Table, before.CurdType, before.Sql, before.DbParms, before.States)
         {
             this.Exception = exception;
             this.ExecuteResult = executeResult;
@@ -235,15 +246,16 @@ namespace FreeSql.Aop
     public class SyncStructureBeforeEventArgs : EventArgs
     {
         public SyncStructureBeforeEventArgs(Type[] entityTypes) :
-            this(Guid.NewGuid(), new Stopwatch(), entityTypes)
+            this(Guid.NewGuid(), new Stopwatch(), entityTypes, new Dictionary<string, object>())
         {
             this.Stopwatch.Start();
         }
-        protected SyncStructureBeforeEventArgs(Guid identifier, Stopwatch stopwatch, Type[] entityTypes)
+        protected SyncStructureBeforeEventArgs(Guid identifier, Stopwatch stopwatch, Type[] entityTypes, Dictionary<string, object> states)
         {
             this.Identifier = identifier;
             this.Stopwatch = stopwatch;
             this.EntityTypes = entityTypes;
+            this.States = states;
         }
 
         /// <summary>
@@ -256,11 +268,15 @@ namespace FreeSql.Aop
         /// 实体类型
         /// </summary>
         public Type[] EntityTypes { get; }
+        /// <summary>
+        /// 状态数据，可与 SyncStructureAfter 共享
+        /// </summary>
+        public Dictionary<string, object> States { get; protected set; }
     }
     public class SyncStructureAfterEventArgs : SyncStructureBeforeEventArgs
     {
         public SyncStructureAfterEventArgs(SyncStructureBeforeEventArgs before, string sql, Exception exception) :
-            base(before.Identifier, before.StopwatchInternal, before.EntityTypes)
+            base(before.Identifier, before.StopwatchInternal, before.EntityTypes, before.States)
         {
             this.Sql = sql;
             this.Exception = exception;
@@ -318,28 +334,73 @@ namespace FreeSql.Aop
             set
             {
                 _value = value;
-                this.IsChanged = true;
+                this.ValueIsChanged = true;
             }
         }
         private object _value;
-        public bool IsChanged { get; private set; }
+        public bool ValueIsChanged { get; private set; }
     }
     public enum AuditValueType { Update, Insert, InsertOrUpdate }
+    #endregion
+
+    #region AuditDataReader
+    public class AuditDataReaderEventArgs : EventArgs
+    {
+        public AuditDataReaderEventArgs(DbDataReader dataReader, int index)
+        {
+            this.DataReader = dataReader;
+            this.Index = index;
+        }
+
+        /// <summary>
+        /// ADO.NET 数据流读取对象
+        /// </summary>
+        public DbDataReader DataReader { get; }
+        /// <summary>
+        /// DataReader 对应的 Index 位置
+        /// </summary>
+        public int Index { get; }
+        /// <summary>
+        /// 获取 Index 对应的值，也可以设置拦截的新值
+        /// </summary>
+        public object Value
+        {
+            get
+            {
+                if (_valueIsGeted == false)
+                {
+                    _value = DataReader.GetValue(Index);
+                    _valueIsGeted = true;
+                }
+                return _value;
+            }
+            set
+            {
+                _value = value;
+                ValueIsChanged = true;
+                _valueIsGeted = true;
+            }
+        }
+        private object _value;
+        internal bool _valueIsGeted;
+        public bool ValueIsChanged { get; private set; }
+    }
     #endregion
 
     #region CommandBefore/After
     public class CommandBeforeEventArgs : EventArgs
     {
         public CommandBeforeEventArgs(DbCommand command) :
-            this(Guid.NewGuid(), new Stopwatch(), command)
+            this(Guid.NewGuid(), new Stopwatch(), command, new Dictionary<string, object>())
         {
             this.Stopwatch.Start();
         }
-        protected CommandBeforeEventArgs(Guid identifier, Stopwatch stopwatch, DbCommand command)
+        protected CommandBeforeEventArgs(Guid identifier, Stopwatch stopwatch, DbCommand command, Dictionary<string, object> states)
         {
             this.Identifier = identifier;
             this.Stopwatch = stopwatch;
             this.Command = command;
+            this.States = states;
         }
 
         /// <summary>
@@ -349,11 +410,15 @@ namespace FreeSql.Aop
         protected Stopwatch Stopwatch { get; }
         internal Stopwatch StopwatchInternal => Stopwatch;
         public DbCommand Command { get; }
+        /// <summary>
+        /// 状态数据，可与 CommandAfter 共享
+        /// </summary>
+        public Dictionary<string, object> States { get; protected set; }
     }
     public class CommandAfterEventArgs : CommandBeforeEventArgs
     {
         public CommandAfterEventArgs(CommandBeforeEventArgs before, Exception exception, string log) :
-            base(before.Identifier, before.StopwatchInternal, before.Command)
+            base(before.Identifier, before.StopwatchInternal, before.Command, before.States)
         {
             this.Exception = exception;
             this.Log = log;
@@ -383,16 +448,17 @@ namespace FreeSql.Aop
     public class TraceBeforeEventArgs : EventArgs
     {
         public TraceBeforeEventArgs(string operation, object value) :
-            this(Guid.NewGuid(), new Stopwatch(), operation, value)
+            this(Guid.NewGuid(), new Stopwatch(), operation, value, new Dictionary<string, object>())
         {
             this.Stopwatch.Start();
         }
-        protected TraceBeforeEventArgs(Guid identifier, Stopwatch stopwatch, string operation, object value)
+        protected TraceBeforeEventArgs(Guid identifier, Stopwatch stopwatch, string operation, object value, Dictionary<string, object> states)
         {
             this.Identifier = identifier;
             this.Stopwatch = stopwatch;
             this.Operation = operation;
             this.Value = value;
+            this.States = states;
         }
 
         /// <summary>
@@ -403,11 +469,15 @@ namespace FreeSql.Aop
         internal Stopwatch StopwatchInternal => Stopwatch;
         public string Operation { get; }
         public object Value { get; }
+        /// <summary>
+        /// 状态数据，可与 TraceAfter 共享
+        /// </summary>
+        public Dictionary<string, object> States { get; protected set; }
     }
     public class TraceAfterEventArgs : TraceBeforeEventArgs
     {
         public TraceAfterEventArgs(TraceBeforeEventArgs before, string remark, Exception exception) :
-            base(before.Identifier, before.StopwatchInternal, before.Operation, before.Value)
+            base(before.Identifier, before.StopwatchInternal, before.Operation, before.Value, before.States)
         {
             this.Remark = remark;
             this.Exception = exception;

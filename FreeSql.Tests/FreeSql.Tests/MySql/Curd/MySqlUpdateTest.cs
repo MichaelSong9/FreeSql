@@ -33,9 +33,9 @@ namespace FreeSql.Tests.MySql
         public void Dywhere()
         {
             Assert.Null(g.mysql.Update<Topic>().ToSql());
-            Assert.Equal("UPDATE `tb_topic` SET title='test' \r\nWHERE (`Id` = 1 OR `Id` = 2)", g.mysql.Update<Topic>(new[] { 1, 2 }).SetRaw("title='test'").ToSql());
+            Assert.Equal("UPDATE `tb_topic` SET title='test' \r\nWHERE (`Id` IN (1,2))", g.mysql.Update<Topic>(new[] { 1, 2 }).SetRaw("title='test'").ToSql());
             Assert.Equal("UPDATE `tb_topic` SET title='test1' \r\nWHERE (`Id` = 1)", g.mysql.Update<Topic>(new Topic { Id = 1, Title = "test" }).SetRaw("title='test1'").ToSql());
-            Assert.Equal("UPDATE `tb_topic` SET title='test1' \r\nWHERE (`Id` = 1 OR `Id` = 2)", g.mysql.Update<Topic>(new[] { new Topic { Id = 1, Title = "test" }, new Topic { Id = 2, Title = "test" } }).SetRaw("title='test1'").ToSql());
+            Assert.Equal("UPDATE `tb_topic` SET title='test1' \r\nWHERE (`Id` IN (1,2))", g.mysql.Update<Topic>(new[] { new Topic { Id = 1, Title = "test" }, new Topic { Id = 2, Title = "test" } }).SetRaw("title='test1'").ToSql());
             Assert.Equal("UPDATE `tb_topic` SET title='test1' \r\nWHERE (`Id` = 1)", g.mysql.Update<Topic>(new { id = 1 }).SetRaw("title='test1'").ToSql());
         }
 
@@ -54,6 +54,9 @@ namespace FreeSql.Tests.MySql
 
             sql = update.SetSource(items).IgnoreColumns(a => new { a.Clicks, a.CreateTime }).ToSql().Replace("\r\n", "");
             Assert.Equal("UPDATE `tb_topic` SET `Title` = CASE `Id` WHEN 1 THEN ?p_0 WHEN 2 THEN ?p_1 WHEN 3 THEN ?p_2 WHEN 4 THEN ?p_3 WHEN 5 THEN ?p_4 WHEN 6 THEN ?p_5 WHEN 7 THEN ?p_6 WHEN 8 THEN ?p_7 WHEN 9 THEN ?p_8 WHEN 10 THEN ?p_9 END WHERE (`Id` IN (1,2,3,4,5,6,7,8,9,10))", sql);
+
+            sql = update.SetSource(items, a => a.Title).ToSql().Replace("\r\n", "");
+            Assert.Equal("UPDATE `tb_topic` SET `Clicks` = CASE `Title` WHEN 'newtitle0' THEN ?p_0 WHEN 'newtitle1' THEN ?p_1 WHEN 'newtitle2' THEN ?p_2 WHEN 'newtitle3' THEN ?p_3 WHEN 'newtitle4' THEN ?p_4 WHEN 'newtitle5' THEN ?p_5 WHEN 'newtitle6' THEN ?p_6 WHEN 'newtitle7' THEN ?p_7 WHEN 'newtitle8' THEN ?p_8 WHEN 'newtitle9' THEN ?p_9 END, `CreateTime` = CASE `Title` WHEN 'newtitle0' THEN ?p_10 WHEN 'newtitle1' THEN ?p_11 WHEN 'newtitle2' THEN ?p_12 WHEN 'newtitle3' THEN ?p_13 WHEN 'newtitle4' THEN ?p_14 WHEN 'newtitle5' THEN ?p_15 WHEN 'newtitle6' THEN ?p_16 WHEN 'newtitle7' THEN ?p_17 WHEN 'newtitle8' THEN ?p_18 WHEN 'newtitle9' THEN ?p_19 END WHERE (`Title` IN ('newtitle0','newtitle1','newtitle2','newtitle3','newtitle4','newtitle5','newtitle6','newtitle7','newtitle8','newtitle9'))", sql);
 
             sql = update.SetSource(items).Set(a => a.CreateTime, new DateTime(2020, 1, 1)).ToSql().Replace("\r\n", "");
             Assert.Equal("UPDATE `tb_topic` SET `CreateTime` = ?p_0 WHERE (`Id` IN (1,2,3,4,5,6,7,8,9,10))", sql);
@@ -372,9 +375,9 @@ limit 0,1", fsql.Select<tenumcls>().Where(a => a.id == item.id && a.status == (a
         public void AsTable()
         {
             Assert.Null(g.mysql.Update<Topic>().ToSql());
-            Assert.Equal("UPDATE `tb_topicAsTable` SET title='test' \r\nWHERE (`Id` = 1 OR `Id` = 2)", g.mysql.Update<Topic>(new[] { 1, 2 }).SetRaw("title='test'").AsTable(a => "tb_topicAsTable").ToSql());
+            Assert.Equal("UPDATE `tb_topicAsTable` SET title='test' \r\nWHERE (`Id` IN (1,2))", g.mysql.Update<Topic>(new[] { 1, 2 }).SetRaw("title='test'").AsTable(a => "tb_topicAsTable").ToSql());
             Assert.Equal("UPDATE `tb_topicAsTable` SET title='test1' \r\nWHERE (`Id` = 1)", g.mysql.Update<Topic>(new Topic { Id = 1, Title = "test" }).SetRaw("title='test1'").AsTable(a => "tb_topicAsTable").ToSql());
-            Assert.Equal("UPDATE `tb_topicAsTable` SET title='test1' \r\nWHERE (`Id` = 1 OR `Id` = 2)", g.mysql.Update<Topic>(new[] { new Topic { Id = 1, Title = "test" }, new Topic { Id = 2, Title = "test" } }).SetRaw("title='test1'").AsTable(a => "tb_topicAsTable").ToSql());
+            Assert.Equal("UPDATE `tb_topicAsTable` SET title='test1' \r\nWHERE (`Id` IN (1,2))", g.mysql.Update<Topic>(new[] { new Topic { Id = 1, Title = "test" }, new Topic { Id = 2, Title = "test" } }).SetRaw("title='test1'").AsTable(a => "tb_topicAsTable").ToSql());
             Assert.Equal("UPDATE `tb_topicAsTable` SET title='test1' \r\nWHERE (`Id` = 1)", g.mysql.Update<Topic>(new { id = 1 }).SetRaw("title='test1'").AsTable(a => "tb_topicAsTable").ToSql());
         }
     }

@@ -9,6 +9,7 @@ public class g
     static Lazy<IFreeSql> mysqlLazy = new Lazy<IFreeSql>(() => new FreeSql.FreeSqlBuilder()
         .UseConnectionString(FreeSql.DataType.OdbcMySql, "Driver={MySQL ODBC 8.0 Unicode Driver};Server=127.0.0.1;Persist Security Info=False;Trusted_Connection=Yes;UID=root;PWD=root;DATABASE=cccddd_odbc;Charset=utf8;SslMode=none;Max pool size=2")
         //.UseConnectionFactory(FreeSql.DataType.OdbcMySql, () => new System.Data.Odbc.OdbcConnection("Driver={MySQL ODBC 8.0 Unicode Driver};Server=127.0.0.1;Persist Security Info=False;Trusted_Connection=Yes;UID=root;PWD=root;DATABASE=cccddd_odbc;Charset=utf8;SslMode=none;"))
+        //.UseConnectionString(FreeSql.DataType.OdbcMySql, "Driver={MySQL ODBC 8.0 Unicode Driver};Server=192.168.164.10;port=33061;Persist Security Info=False;Trusted_Connection=Yes;UID=root;PWD=root;DATABASE=cccddd_odbc;Charset=utf8;SslMode=none;Max pool size=2")
         .UseAutoSyncStructure(true)
         .UseMonitorCommand(
             cmd => Trace.WriteLine(cmd.CommandText), //监听SQL命令对象，在执行前
@@ -18,7 +19,7 @@ public class g
     public static IFreeSql mysql => mysqlLazy.Value;
 
     static Lazy<IFreeSql> sqlserverLazy = new Lazy<IFreeSql>(() => new FreeSql.FreeSqlBuilder()
-        .UseConnectionString(FreeSql.DataType.OdbcSqlServer, "Driver={SQL Server};Server=.;Persist Security Info=False;Trusted_Connection=Yes;Integrated Security=True;DATABASE=freesqlTest_odbc;Pooling=true;Max pool size=3")
+        .UseConnectionString(FreeSql.DataType.OdbcSqlServer, "Driver={SQL Server};Server=.;Persist Security Info=False;Trusted_Connection=Yes;Integrated Security=True;DATABASE=issues684_odbc;Pooling=true;Max pool size=3")
         //.UseConnectionFactory(FreeSql.DataType.OdbcSqlServer, () => new System.Data.Odbc.OdbcConnection("Driver={SQL Server};Server=.;Persist Security Info=False;Trusted_Connection=Yes;Integrated Security=True;DATABASE=freesqlTest_odbc;Pooling=true;"))
         //.UseConnectionString(FreeSql.DataType.OdbcSqlServer, "Driver={SQL Server};Server=192.168.164.129;Persist Security Info=False;Trusted_Connection=Yes;UID=sa;PWD=123456;DATABASE=ds_shop;")
         //.UseConnectionFactory(FreeSql.DataType.OdbcSqlServer, () => new System.Data.Odbc.OdbcConnection("Driver={SQL Server};Server=192.168.164.129;Persist Security Info=False;Trusted_Connection=Yes;UID=sa;PWD=123456;DATABASE=ds_shop;"))

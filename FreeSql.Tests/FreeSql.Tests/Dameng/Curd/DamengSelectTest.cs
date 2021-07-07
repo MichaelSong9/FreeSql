@@ -96,22 +96,22 @@ namespace FreeSql.Tests.Dameng
             //SELECT a.`Id`, a.`Parent_id`, a.`Ddd`, a.`Name` 
             //FROM `Tag` a 
             //WHERE (exists(SELECT 1 
-            //	FROM `Tag` t 
-            //	LEFT JOIN `Tag` t__Parent ON t__Parent.`Id` = t.`Parent_id` 
-            //	WHERE (t__Parent.`Id` = 10) AND (t.`Parent_id` = a.`Id`) 
-            //	limit 0,1))
+            //    FROM `Tag` t 
+            //    LEFT JOIN `Tag` t__Parent ON t__Parent.`Id` = t.`Parent_id` 
+            //    WHERE (t__Parent.`Id` = 10) AND (t.`Parent_id` = a.`Id`) 
+            //    limit 0,1))
 
             //ManyToMany
             var t2 = g.dameng.Select<Song>().Where(s => s.Tags.AsSelect().Any(t => t.Name == "国语")).ToSql();
             //SELECT a.`Id`, a.`Create_time`, a.`Is_deleted`, a.`Title`, a.`Url` 
             //FROM `Song` a
             //WHERE(exists(SELECT 1
-            //	FROM `Song_tag` Mt_Ms
-            //	WHERE(Mt_Ms.`Song_id` = a.`Id`) AND(exists(SELECT 1
-            //		FROM `Tag` t
-            //		WHERE(t.`Name` = '国语') AND(t.`Id` = Mt_Ms.`Tag_id`)
-            //		limit 0, 1))
-            //	limit 0, 1))
+            //    FROM `Song_tag` Mt_Ms
+            //    WHERE(Mt_Ms.`Song_id` = a.`Id`) AND(exists(SELECT 1
+            //        FROM `Tag` t
+            //        WHERE(t.`Name` = '国语') AND(t.`Id` = Mt_Ms.`Tag_id`)
+            //        limit 0, 1))
+            //    limit 0, 1))
         }
 
         [Fact]
@@ -211,6 +211,10 @@ namespace FreeSql.Tests.Dameng
                 })
             });
             var ddd = g.dameng.Select<District>().LeftJoin(d => d.ParentCode == d.Parent.Code).ToTreeList();
+            Assert.Single(ddd);
+            Assert.Equal(2, ddd[0].Childs.Count);
+
+            ddd = g.dameng.Select<District>().LeftJoin(d => d.ParentCode == d.Parent.Code).ToTreeListAsync().Result;
             Assert.Single(ddd);
             Assert.Equal(2, ddd[0].Childs.Count);
         }
@@ -332,6 +336,7 @@ namespace FreeSql.Tests.Dameng
             var sql = query.ToSql().Replace("\r\n", "");
             Assert.Equal("SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a__Type.\"GUID\", a__Type.\"PARENTID\", a__Type.\"NAME\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a LEFT JOIN \"TESTTYPEINFO\" a__Type ON a__Type.\"GUID\" = a.\"TYPEGUID\"", sql);
             query.ToList();
+            query.ToList(true);
 
             query = select.LeftJoin(a => a.Type.Guid == a.TypeGuid && a.Type.Name == "xxx");
             sql = query.ToSql().Replace("\r\n", "");
@@ -471,6 +476,7 @@ namespace FreeSql.Tests.Dameng
             var sql = query.ToSql().Replace("\r\n", "");
             Assert.Equal("SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a__Type.\"GUID\", a__Type.\"PARENTID\", a__Type.\"NAME\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a RIGHT JOIN \"TESTTYPEINFO\" a__Type ON a__Type.\"GUID\" = a.\"TYPEGUID\"", sql);
             query.ToList();
+            query.ToList(true);
 
             query = select.RightJoin(a => a.Type.Guid == a.TypeGuid && a.Type.Name == "xxx");
             sql = query.ToSql().Replace("\r\n", "");
@@ -742,6 +748,10 @@ namespace FreeSql.Tests.Dameng
 
             var fkfjfj = select.GroupBy(a => a.Title)
                 .ToList(a => a.Sum(a.Value.TypeGuid));
+            var fkfjfj2 = select.GroupBy(a => a.Title)
+                .Page(2, 10)
+                .OrderBy(a => a.Key)
+                .ToList(a => a.Sum(a.Value.TypeGuid));
 
             var aggsql1 = select
                 .GroupBy(a => a.Title)
@@ -793,7 +803,7 @@ namespace FreeSql.Tests.Dameng
                 {
                     b.Key.Title,
                     b.Key.yyyy,
-
+                    b.Key,
                     cou = b.Count(),
                     sum2 = b.Sum(b.Value.TypeGuid)
                 });
@@ -812,12 +822,30 @@ namespace FreeSql.Tests.Dameng
         public void ToAggregate()
         {
             var sql = select.ToAggregate(a => new { sum = a.Sum(a.Key.Id + 11.11), avg = a.Avg(a.Key.Id), count = a.Count(), max = a.Max(a.Key.Id), min = a.Min(a.Key.Id) });
+
+            var sel1 = select
+                .Aggregate(a => new { sum = a.Sum(a.Key.Id), count = a.Count() }, out var output)
+                .ToList();
+
+            var sel2 = select
+                .Aggregate(a => Convert.ToInt32("count(distinct title)"), out var output2)
+                .ToList();
         }
         [Fact]
         public void OrderBy()
         {
             var sql = select.Offset(10).OrderBy(a => new Random().NextDouble()).ToList();
         }
+        [Fact]
+        public void OrderByRandom()
+        {
+            var t1 = select.OrderByRandom().Limit(10).ToSql("1");
+            Assert.Equal(@"SELECT  t.* FROM (SELECT 1 
+FROM ""TB_TOPIC22"" a 
+ORDER BY dbms_random.value) t WHERE ROWNUM < 11", t1);
+            var t2 = select.OrderByRandom().Limit(10).ToList();
+        }
+
         [Fact]
         public void Skip_Offset()
         {
@@ -855,8 +883,7 @@ namespace FreeSql.Tests.Dameng
                 count = (long)select.As("b").Sum(b => b.Id)
             });
             Assert.Equal(@"SELECT a.""ID"" as1, a.""CLICKS"" as2, a.""TYPEGUID"" as3, a.""TITLE"" as4, a.""CREATETIME"" as5, (SELECT sum(b.""ID"") 
-	FROM ""TB_TOPIC22"" b 
-	WHERE ROWNUM < 2) as6 
+    FROM ""TB_TOPIC22"" b) as6 
 FROM ""TB_TOPIC22"" a", subquery);
             var subqueryList = select.ToList(a => new
             {
@@ -873,8 +900,7 @@ FROM ""TB_TOPIC22"" a", subquery);
                 count = select.As("b").Min(b => b.Id)
             });
             Assert.Equal(@"SELECT a.""ID"" as1, a.""CLICKS"" as2, a.""TYPEGUID"" as3, a.""TITLE"" as4, a.""CREATETIME"" as5, (SELECT min(b.""ID"") 
-	FROM ""TB_TOPIC22"" b 
-	WHERE ROWNUM < 2) as6 
+    FROM ""TB_TOPIC22"" b) as6 
 FROM ""TB_TOPIC22"" a", subquery);
             var subqueryList = select.ToList(a => new
             {
@@ -891,8 +917,7 @@ FROM ""TB_TOPIC22"" a", subquery);
                 count = select.As("b").Max(b => b.Id)
             });
             Assert.Equal(@"SELECT a.""ID"" as1, a.""CLICKS"" as2, a.""TYPEGUID"" as3, a.""TITLE"" as4, a.""CREATETIME"" as5, (SELECT max(b.""ID"") 
-	FROM ""TB_TOPIC22"" b 
-	WHERE ROWNUM < 2) as6 
+    FROM ""TB_TOPIC22"" b) as6 
 FROM ""TB_TOPIC22"" a", subquery);
             var subqueryList = select.ToList(a => new
             {
@@ -909,8 +934,7 @@ FROM ""TB_TOPIC22"" a", subquery);
                 count = select.As("b").Avg(b => b.Id)
             });
             Assert.Equal(@"SELECT a.""ID"" as1, a.""CLICKS"" as2, a.""TYPEGUID"" as3, a.""TITLE"" as4, a.""CREATETIME"" as5, (SELECT avg(b.""ID"") 
-	FROM ""TB_TOPIC22"" b 
-	WHERE ROWNUM < 2) as6 
+    FROM ""TB_TOPIC22"" b) as6 
 FROM ""TB_TOPIC22"" a", subquery);
             var subqueryList = select.ToList(a => new
             {
@@ -925,7 +949,7 @@ FROM ""TB_TOPIC22"" a", subquery);
             Assert.Equal(@"SELECT a.""ID"", a.""CLICKS"", a.""TYPEGUID"", a.""TITLE"", a.""CREATETIME"" 
 FROM ""TB_TOPIC22"" a 
 WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE"" 
-	FROM ""TB_TOPIC22"" b)))", subquery);
+    FROM ""TB_TOPIC22"" b)))", subquery);
             var subqueryList = select.Where(a => select.As("b").ToList(b => b.Title).Contains(a.Id.ToString())).ToList();
         }
         [Fact]
@@ -937,6 +961,8 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
         public void AsTable()
         {
             g.dameng.CodeFirst.SyncStructure(typeof(Topic), "TB_TOPIC");
+            g.dameng.CodeFirst.SyncStructure(typeof(Topic), "TB_TOPIC");
+            g.dameng.CodeFirst.SyncStructure(typeof(Topic), "TB_TOPIC", isForceSync: true);
 
             var listt = select.AsTable((a, b) => "(select * from tb_topic where clicks > 10)").Page(1, 10).ToList();
 
@@ -1005,12 +1031,12 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
 
             query = select.AsTable((_, old) => old).AsTable((_, old) => old);
             sql = query.ToSql().Replace("\r\n", "");
-            Assert.Equal("SELECT  * from (SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a) ftb UNION ALLSELECT  * from (SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a) ftb", sql);
+            Assert.Equal("SELECT  * from (SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a) ftb UNION ALL SELECT  * from (SELECT a.\"ID\", a.\"CLICKS\", a.\"TYPEGUID\", a.\"TITLE\", a.\"CREATETIME\" FROM \"TB_TOPIC22\" a) ftb", sql);
             query.ToList();
 
             query = select.AsTable((_, old) => old).AsTable((_, old) => old);
             sql = query.ToSql("count(1) as1").Replace("\r\n", "");
-            Assert.Equal("SELECT  * from (SELECT count(1) as1 FROM \"TB_TOPIC22\" a) ftb UNION ALLSELECT  * from (SELECT count(1) as1 FROM \"TB_TOPIC22\" a) ftb", sql);
+            Assert.Equal("SELECT  * from (SELECT count(1) as1 FROM \"TB_TOPIC22\" a) ftb UNION ALL SELECT  * from (SELECT count(1) as1 FROM \"TB_TOPIC22\" a) ftb", sql);
             query.Count();
 
             select.AsTable((_, old) => old).AsTable((_, old) => old).Max(a => a.Id);
@@ -1077,6 +1103,11 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
         [Fact]
         public void Include_OneToMany()
         {
+            g.dameng.Delete<TiOtmModel1>().Where("1=1").ExecuteAffrows();
+            g.dameng.Delete<TiOtmModel2>().Where("1=1").ExecuteAffrows();
+            g.dameng.Delete<TiOtmModel3>().Where("1=1").ExecuteAffrows();
+            g.dameng.Delete<TiOtmModel4>().Where("1=1").ExecuteAffrows();
+
             var model1 = new TiOtmModel1 { m1name = DateTime.Now.Second.ToString() };
             model1.id = (int)g.dameng.Insert(model1).ExecuteIdentity();
             var model2 = new TiOtmModel2 { model2id = model1.id, m2setting = DateTime.Now.Second.ToString() };
@@ -1195,6 +1226,10 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
         [Fact]
         public void Include_OneToMany2()
         {
+            g.dameng.Delete<TiOtmModel11>().Where("1=1").ExecuteAffrows();
+            g.dameng.Delete<TiOtmModel22>().Where("1=1").ExecuteAffrows();
+            g.dameng.Delete<TiOtmModel33>().Where("1=1").ExecuteAffrows();
+
             string setting = "x";
             var model2 = new TiOtmModel22 { m2setting = DateTime.Now.Second.ToString(), aaa = "aaa" + DateTime.Now.Second, bbb = "bbb" + DateTime.Now.Second };
             model2.id = (int)g.dameng.Insert(model2).ExecuteIdentity();
@@ -1653,6 +1688,9 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
             Assert.Equal(5, g.dameng.Select<ToUpd1Pk>().Count());
             Assert.Equal(5, g.dameng.Select<ToUpd1Pk>().Where(a => a.name.StartsWith("nick")).Count());
 
+            var toupdateSql1 = g.dameng.Select<ToUpd1Pk>().Where(a => a.name.StartsWith("name")).ToUpdate().Set(a => a.name, "nick?").ToSql();
+            var toupdateSql2 = g.dameng.Select<ToUpd1Pk>().AsTable((_, old) => "toupd1pk_test").Where(a => a.name.StartsWith("name")).ToUpdate().Set(a => a.name, "nick?").ToSql();
+
             g.dameng.Select<ToUpd2Pk>().ToDelete().ExecuteAffrows();
             Assert.Equal(0, g.dameng.Select<ToUpd2Pk>().Count());
             g.dameng.Insert(new[] {
@@ -1800,6 +1838,22 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
             Assert.Equal("中国[100000] -> 北京[110000]", t4[1].path);
             Assert.Equal("中国[100000] -> 北京[110000] -> 北京市[110100]", t4[2].path);
             Assert.Equal("中国[100000] -> 北京[110000] -> 东城区[110101]", t4[3].path);
+
+            var select = fsql.Select<VM_District_Child>()
+                .Where(a => a.Name == "中国")
+                .AsTreeCte()
+                //.OrderBy("a.cte_level desc") //递归层级
+                ;
+            // var list = select.ToList(); //自己调试看查到的数据
+            select.ToUpdate().Set(a => a.testint, 855).ExecuteAffrows();
+            Assert.Equal(855, fsql.Select<VM_District_Child>()
+                .Where(a => a.Name == "中国")
+                .AsTreeCte().Distinct().First(a => a.testint));
+
+            Assert.Equal(4, select.ToDelete().ExecuteAffrows());
+            Assert.False(fsql.Select<VM_District_Child>()
+                .Where(a => a.Name == "中国")
+                .AsTreeCte().Any());
         }
 
         [Table(Name = "D_District")]
@@ -1813,6 +1867,8 @@ WHERE (((to_char(a.""ID"")) in (SELECT b.""TITLE""
 
             [Column(StringLength = 6)]
             public virtual string ParentCode { get; set; }
+
+            public int testint { get; set; }
         }
         [Table(Name = "D_District", DisableSyncStructure = true)]
         public class VM_District_Child : BaseDistrict

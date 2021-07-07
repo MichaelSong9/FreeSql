@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using static FreeSql.SqlExtExtensions;
@@ -104,16 +105,124 @@ namespace FreeSql
         #endregion
 
         /// <summary>
+        /// isnull、ifnull、coalesce、nvl
+        /// </summary>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="value"></param>
+        /// <param name="defaultValue"></param>
+        /// <returns></returns>
+        public static TValue IsNull<TValue>(TValue value, TValue defaultValue)
+        {
+            expContext.Value.Result = expContext.Value._commonExp._common.IsNull(expContext.Value.ParsedContent["value"], expContext.Value.ParsedContent["defaultValue"]);
+            return default(TValue);
+        }
+
+        /// <summary>
+        /// count(distinct name)
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="column"></param>
+        /// <returns></returns>
+        public static long DistinctCount<T>(T column)
+        {
+            expContext.Value.Result = $"count(distinct {expContext.Value.ParsedContent["column"]})";
+            return 0;
+        }
+
+        #region 大小判断
+        /// <summary>
+        /// 大于 &gt;
+        /// </summary>
+        /// <returns></returns>
+        public static bool GreaterThan<TValue>(TValue value1, TValue value2)
+        {
+            expContext.Value.Result = $"{expContext.Value.ParsedContent["value1"]} > {expContext.Value.ParsedContent["value2"]}";
+            return false;
+        }
+        /// <summary>
+        /// 大于或等于 &gt;=
+        /// </summary>
+        /// <returns></returns>
+        public static bool GreaterThanOrEqual<TValue>(TValue value1, TValue value2)
+        {
+            expContext.Value.Result = $"{expContext.Value.ParsedContent["value1"]} >= {expContext.Value.ParsedContent["value2"]}";
+            return false;
+        }
+        /// <summary>
+        /// 小于 &lt;
+        /// </summary>
+        /// <returns></returns>
+        public static bool LessThan<TValue>(TValue value1, TValue value2)
+        {
+            expContext.Value.Result = $"{expContext.Value.ParsedContent["value1"]} < {expContext.Value.ParsedContent["value2"]}";
+            return false;
+        }
+        /// <summary>
+        /// 小于或等于 &lt;=
+        /// </summary>
+        /// <returns></returns>
+        public static bool LessThanOrEqual<TValue>(TValue value1, TValue value2)
+        {
+            expContext.Value.Result = $"{expContext.Value.ParsedContent["value1"]} <= {expContext.Value.ParsedContent["value2"]}";
+            return false;
+        }
+        #endregion
+
+        /// <summary>
         /// case when .. then .. end
         /// </summary>
         /// <returns></returns>
         public static ICaseWhenEnd Case() => SqlExtExtensions.Case();
+        /// <summary>
+        /// case when .. then .. end
+        /// </summary>
+        /// <typeparam name="TInput"></typeparam>
+        /// <typeparam name="TOutput"></typeparam>
+        /// <param name="input"></param>
+        /// <param name="dict"></param>
+        /// <returns></returns>
+        public static TOutput CaseDict<TInput, TOutput>(TInput input, [RawValue] Dictionary<TInput, TOutput> dict)
+        {
+            var ec = expContext.Value;
+            var sb = new StringBuilder();
+            sb.Append("case");
+            foreach (var kv in dict)
+                sb.Append(" when ").Append(ec.ParsedContent["input"]).Append(" = ").Append(ec.FormatSql(kv.Key))
+                    .Append(" then ").Append(ec.FormatSql(kv.Value));
+            sb.Append(" end");
+            ec.Result = sb.ToString();
+            return default;
+        }
         /// <summary>
         /// MySql group_concat(distinct .. order by .. separator ..)
         /// </summary>
         /// <param name="column"></param>
         /// <returns></returns>
         public static IGroupConcat GroupConcat(object column) => SqlExtExtensions.GroupConcat(column);
+        /// <summary>
+        /// MySql find_in_set(str, strlist)
+        /// </summary>
+        /// <typeparam name="TValue"></typeparam>
+        /// <param name="str"></param>
+        /// <param name="strlist"></param>
+        /// <returns></returns>
+        public static int FindInSet<TValue>(TValue str, string strlist)
+        {
+            expContext.Value.Result = $"find_in_set({expContext.Value.ParsedContent["str"]}, {expContext.Value.ParsedContent["strlist"]})";
+            return 0;
+        }
+
+        /// <summary>
+        /// PostgreSQL string_agg(.., ..)
+        /// </summary>
+        /// <param name="column"></param>
+        /// <param name="delimiter"></param>
+        /// <returns></returns>
+        public static string StringAgg(object column, object delimiter)
+        {
+            expContext.Value.Result = $"string_agg({expContext.Value.ParsedContent["column"]}, {expContext.Value.ParsedContent["delimiter"]})";
+            return "";
+        }
     }
 
     [ExpressionCall]
@@ -126,6 +235,7 @@ namespace FreeSql
         internal class ExpSbInfo
         {
             public StringBuilder Sb { get; } = new StringBuilder();
+            public bool IsOver = false;
             public bool IsOrderBy = false;
             public bool IsDistinct = false;
         }
@@ -135,17 +245,30 @@ namespace FreeSql
         {
             if (expSb.Value == null) expSb.Value = new List<ExpSbInfo>();
             expSb.Value.Add(new ExpSbInfo());
-            expSbLast.Sb.Append(sqlFunc).Append(" ");
+            expSbLast.Sb.Append(sqlFunc);
             return null;
         }
         public static ISqlOver<TValue> Over<TValue>(this ISqlOver<TValue> that)
         {
-            expSbLast.Sb.Append("over(");
+            expSbLast.Sb.Append(" over(");
+            expSbLast.IsOver = true;
             return that;
         }
         public static ISqlOver<TValue> PartitionBy<TValue>(this ISqlOver<TValue> that, object column)
         {
-            expSbLast.Sb.Append(" partition by ").Append(expContext.ParsedContent["column"]).Append(",");
+            var sb = expSbLast.Sb;
+            sb.Append(" partition by ");
+            var exp = expContext.RawExpression["column"];
+            if (exp.NodeType == ExpressionType.New)
+            {
+                var expNew = exp as NewExpression;
+                for (var a = 0; a < expNew.Arguments.Count; a++)
+                {
+                    if (a > 0) sb.Append(",");
+                    sb.Append(expContext.Utility.ParseExpression(expNew.Arguments[a]));
+                }
+            } else
+                sb.Append(expContext.ParsedContent["column"]);
             return that;
         }
         public static ISqlOver<TValue> OrderBy<TValue>(this ISqlOver<TValue> that, object column) => OrderByPriv(that, false);
@@ -158,17 +281,32 @@ namespace FreeSql
                 sb.Append(" order by ");
                 expSbLast.IsOrderBy = true;
             }
-            sb.Append(expContext.ParsedContent["column"]);
-            if (isDesc) sb.Append(" desc");
-            sb.Append(",");
+            var exp = expContext.RawExpression["column"];
+            if (exp.NodeType == ExpressionType.New)
+            {
+                var expNew = exp as NewExpression;
+                for (var a = 0; a < expNew.Arguments.Count; a++)
+                {
+                    sb.Append(expContext.Utility.ParseExpression(expNew.Arguments[a]));
+                    if (isDesc) sb.Append(" desc");
+                    sb.Append(",");
+                }
+            }
+            else
+            {
+                sb.Append(expContext.ParsedContent["column"]);
+                if (isDesc) sb.Append(" desc");
+                sb.Append(",");
+            }
             return that;
         }
         public static TValue ToValue<TValue>(this ISqlOver<TValue> that)
         {
             var sql = expSbLast.Sb.ToString().TrimEnd(',');
+            if (expSbLast.IsOver) sql = $"{sql})";
             expSbLast.Sb.Clear();
             expSb.Value.RemoveAt(expSb.Value.Count - 1);
-            expContext.Result = $"{sql})";
+            expContext.Result = sql;
             return default;
         }
         public interface ISqlOver<TValue> { }
@@ -242,9 +380,23 @@ namespace FreeSql
                 sb.Append(" order by ");
                 expSbLast.IsOrderBy = true;
             }
-            sb.Append(expContext.ParsedContent["column"]);
-            if (isDesc) sb.Append(" desc");
-            sb.Append(",");
+            var exp = expContext.RawExpression["column"];
+            if (exp.NodeType == ExpressionType.New)
+            {
+                var expNew = exp as NewExpression;
+                for (var a = 0; a < expNew.Arguments.Count; a++)
+                {
+                    sb.Append(expContext.Utility.ParseExpression(expNew.Arguments[a]));
+                    if (isDesc) sb.Append(" desc");
+                    sb.Append(",");
+                }
+            }
+            else
+            {
+                sb.Append(expContext.ParsedContent["column"]);
+                if (isDesc) sb.Append(" desc");
+                sb.Append(",");
+            }
             return that;
         }
         public static string ToValue(this IGroupConcat that)
@@ -256,6 +408,47 @@ namespace FreeSql
             return default;
         }
         public interface IGroupConcat { }
+        #endregion
+
+        #region string.Join 反射处理，此块代码用于反射，所以别修改定义
+        public static string StringJoinSqliteGroupConcat(object column, object delimiter)
+        {
+            expContext.Result = $"group_concat({expContext.ParsedContent["column"]},{expContext.ParsedContent["delimiter"]})";
+            return null;
+        }
+        public static string StringJoinPgsqlGroupConcat(object column, object delimiter)
+        {
+            expContext.Result = $"string_agg(({expContext.ParsedContent["column"]})::text,{expContext.ParsedContent["delimiter"]})";
+            return null;
+        }
+        public static string StringJoinMySqlGroupConcat(object column, object delimiter)
+        {
+            expContext.Result = $"group_concat({expContext.ParsedContent["column"]} separator {expContext.ParsedContent["delimiter"]})";
+            return null;
+        }
+        public static string StringJoinOracleGroupConcat(object column, object delimiter)
+        {
+            string orderby = null;
+            var subSelect = expContext._tsc?.subSelect001;
+            if (subSelect != null)
+            {
+                orderby = subSelect?._orderby?.Trim('\r', '\n');
+                if (string.IsNullOrEmpty(orderby))
+                {
+                    var subSelectTb1 = subSelect._tables.FirstOrDefault();
+                    if (subSelectTb1 != null && subSelectTb1.Table.Primarys.Any() == true)
+                        orderby = $"order by {string.Join(",", subSelectTb1.Table.Primarys.Select(a => $"{subSelectTb1.Alias}.{subSelect._commonUtils.QuoteSqlName(a.Attribute.Name)}"))}";
+                }
+            }
+            if (string.IsNullOrEmpty(orderby)) orderby = "order by 1";
+            expContext.Result = $"listagg(to_char({expContext.ParsedContent["column"]}),{expContext.ParsedContent["delimiter"]}) within group({orderby})";
+            return null;
+        }
+        public static string StringJoinFirebirdList(object column, object delimiter)
+        {
+            expContext.Result = $"list({expContext.ParsedContent["column"]},{expContext.ParsedContent["delimiter"]})";
+            return null;
+        }
         #endregion
     }
 }

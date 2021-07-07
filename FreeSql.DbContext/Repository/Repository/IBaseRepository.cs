@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FreeSql
@@ -79,19 +80,36 @@ namespace FreeSql
         int Delete(IEnumerable<TEntity> entitys);
         int Delete(Expression<Func<TEntity, bool>> predicate);
 
+        /// <summary>
+        /// 开始编辑数据，然后调用方法 EndEdit 分析出添加、修改、删除 SQL 语句进行执行<para></para>
+        /// 场景：winform 加载表数据后，一顿添加、修改、删除操作之后，最后才点击【保存】<para></para><para></para>
+        /// 示例：https://github.com/dotnetcore/FreeSql/issues/397<para></para>
+        /// 注意：* 本方法只支持单表操作，不支持导航属性级联保存
+        /// </summary>
+        /// <param name="data"></param>
+        void BeginEdit(List<TEntity> data);
+        /// <summary>
+        /// 完成编辑数据，进行保存动作<para></para>
+        /// 该方法根据 BeginEdit 传入的数据状态分析出添加、修改、删除 SQL 语句<para></para>
+        /// 注意：* 本方法只支持单表操作，不支持导航属性级联保存
+        /// </summary>
+        /// <param name="data">可选参数：手工传递最终的 data 值进行对比<para></para>默认：如果不传递，则使用 BeginEdit 传入的 data 引用进行对比</param>
+        /// <returns></returns>
+        int EndEdit(List<TEntity> data = null);
+
 #if net40
 #else
-        Task<TEntity> InsertAsync(TEntity entity);
-        Task<List<TEntity>> InsertAsync(IEnumerable<TEntity> entitys);
+        Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task<List<TEntity>> InsertAsync(IEnumerable<TEntity> entitys, CancellationToken cancellationToken = default);
 
-        Task<int> UpdateAsync(TEntity entity);
-        Task<int> UpdateAsync(IEnumerable<TEntity> entitys);
-        Task<TEntity> InsertOrUpdateAsync(TEntity entity);
-        Task SaveManyAsync(TEntity entity, string propertyName);
+        Task<int> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task<int> UpdateAsync(IEnumerable<TEntity> entitys, CancellationToken cancellationToken = default);
+        Task<TEntity> InsertOrUpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task SaveManyAsync(TEntity entity, string propertyName, CancellationToken cancellationToken = default);
 
-        Task<int> DeleteAsync(TEntity entity);
-        Task<int> DeleteAsync(IEnumerable<TEntity> entitys);
-        Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate);
+        Task<int> DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
+        Task<int> DeleteAsync(IEnumerable<TEntity> entitys, CancellationToken cancellationToken = default);
+        Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 #endif
     }
 
@@ -104,9 +122,9 @@ namespace FreeSql
 
 #if net40
 #else
-        Task<TEntity> GetAsync(TKey id);
-        Task<TEntity> FindAsync(TKey id);
-        Task<int> DeleteAsync(TKey id);
+        Task<TEntity> GetAsync(TKey id, CancellationToken cancellationToken = default);
+        Task<TEntity> FindAsync(TKey id, CancellationToken cancellationToken = default);
+        Task<int> DeleteAsync(TKey id, CancellationToken cancellationToken = default);
 #endif
     }
 }

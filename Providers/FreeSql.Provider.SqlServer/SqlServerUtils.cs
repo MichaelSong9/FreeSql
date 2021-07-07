@@ -1,10 +1,15 @@
 ﻿using FreeSql.Internal;
+using FreeSql.Internal.CommonProvider;
 using FreeSql.Internal.Model;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+#if microsoft
+using Microsoft.Data.SqlClient;
+#else
 using System.Data.SqlClient;
+#endif
 using System.Globalization;
 using System.Text;
 
@@ -34,7 +39,7 @@ namespace FreeSql.SqlServer
                 if (dbtype != SqlDbType.Variant)
                 {
                     ret.SqlDbType = dbtype;
-                    if (col.DbSize != 0) ret.Size = col.DbSize;
+                    //if (col.DbSize != 0) ret.Size = col.DbSize;
                     if (col.DbPrecision != 0) ret.Precision = col.DbPrecision;
                     if (col.DbScale != 0) ret.Scale = col.DbScale;
                 }
@@ -44,7 +49,7 @@ namespace FreeSql.SqlServer
         }
 
         public override DbParameter[] GetDbParamtersByObject(string sql, object obj) =>
-            Utils.GetDbParamtersByObject<SqlParameter>(sql, obj, "@", (name, type, value) =>
+            Utils.GetDbParamtersByObject<DbParameter>(sql, obj, "@", (name, type, value) =>
             {
                 if (value?.Equals(DateTime.MinValue) == true) value = new DateTime(1970, 1, 1);
                 var ret = new SqlParameter { ParameterName = $"@{name}", Value = value };
@@ -95,10 +100,10 @@ namespace FreeSql.SqlServer
         public override string Now => "getdate()";
         public override string NowUtc => "getutcdate()";
 
-        public override string QuoteWriteParamter(Type type, string paramterName) => paramterName;
-        public override string QuoteReadColumn(Type type, Type mapType, string columnName) => columnName;
+        public override string QuoteWriteParamterAdapter(Type type, string paramterName) => paramterName;
+        protected override string QuoteReadColumnAdapter(Type type, Type mapType, string columnName) => columnName;
 
-        public override string GetNoneParamaterSqlValue(List<DbParameter> specialParams, Type type, object value)
+        public override string GetNoneParamaterSqlValue(List<DbParameter> specialParams, string specialParamFlag, ColumnInfo col, Type type, object value)
         {
             if (value == null) return "NULL";
             if (type.IsNumberType()) return string.Format(CultureInfo.InvariantCulture, "{0}", value);
@@ -108,7 +113,7 @@ namespace FreeSql.SqlServer
                 var ts = (TimeSpan)value;
                 value = $"{ts.Hours}:{ts.Minutes}:{ts.Seconds}.{ts.Milliseconds}";
             }
-            return FormatSql("{0}", value, 1);
+            return string.Format(CultureInfo.InvariantCulture, "{0}", (_orm.Ado as AdoProvider).AddslashesProcessParam(value, type, col));
         }
     }
 }

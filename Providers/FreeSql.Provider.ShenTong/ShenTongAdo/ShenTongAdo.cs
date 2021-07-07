@@ -42,8 +42,10 @@ namespace FreeSql.ShenTong
 
             if (param is bool || param is bool?)
                 return (bool)param ? "'t'" : "'f'";
-            else if (param is string || param is char)
+            else if (param is string)
                 return string.Concat("'", param.ToString().Replace("'", "''"), "'");
+            else if (param is char)
+                return string.Concat("'", param.ToString().Replace("'", "''").Replace('\0', ' '), "'");
             else if (param is Enum)
                 return ((Enum)param).ToInt64();
             else if (decimal.TryParse(string.Concat(param), out var trydec))
@@ -60,18 +62,18 @@ namespace FreeSql.ShenTong
             return string.Concat("'", param.ToString().Replace("'", "''"), "'");
         }
 
-        protected override DbCommand CreateCommand()
+        public override DbCommand CreateCommand()
         {
             return new OscarCommand();
         }
 
-        protected override void ReturnConnection(IObjectPool<DbConnection> pool, Object<DbConnection> conn, Exception ex)
+        public override void ReturnConnection(IObjectPool<DbConnection> pool, Object<DbConnection> conn, Exception ex)
         {
             var rawPool = pool as ShenTongConnectionPool;
             if (rawPool != null) rawPool.Return(conn, ex);
             else pool.Return(conn);
         }
 
-        protected override DbParameter[] GetDbParamtersByObject(string sql, object obj) => _util.GetDbParamtersByObject(sql, obj);
+        public override DbParameter[] GetDbParamtersByObject(string sql, object obj) => _util.GetDbParamtersByObject(sql, obj);
     }
 }

@@ -13,6 +13,30 @@ namespace FreeSql.Tests.ShenTong
 {
     public class ShenTongCodeFirstTest
     {
+        [Fact]
+        public void InsertUpdateParameter()
+        {
+            var fsql = g.shentong;
+            fsql.CodeFirst.SyncStructure<ts_iupstr_bak>();
+            var item = new ts_iupstr { id = Guid.NewGuid(), title = string.Join(",", Enumerable.Range(0, 2000).Select(a => "我是中国人")) };
+            Assert.Equal(1, fsql.Insert(item).ExecuteAffrows());
+            var find = fsql.Select<ts_iupstr>().Where(a => a.id == item.id).First();
+            Assert.NotNull(find);
+            Assert.Equal(find.id, item.id);
+            Assert.Equal(find.title, item.title);
+        }
+        [Table(Name = "ts_iupstr_bak", DisableSyncStructure = true)]
+        class ts_iupstr
+        {
+            public Guid id { get; set; }
+            public string title { get; set; }
+        }
+        class ts_iupstr_bak
+        {
+            public Guid id { get; set; }
+            [Column(StringLength = -1)]
+            public string title { get; set; }
+        }
 
         [Fact]
         public void StringLength()
@@ -90,11 +114,12 @@ namespace FreeSql.Tests.ShenTong
         {
             var sql = g.shentong.CodeFirst.GetComparisonDDLStatements<AddUniquesInfo>();
             g.shentong.CodeFirst.SyncStructure<AddUniquesInfo>();
+            g.shentong.CodeFirst.SyncStructure(typeof(AddUniquesInfo), "AddUniquesInfo1");
         }
         [Table(Name = "AddUniquesInfo", OldName = "AddUniquesInfo2")]
-        [Index("uk_phone", "phone", true)]
-        [Index("uk_group_index", "group,index", true)]
-        [Index("uk_group_index22", "group, index22", false)]
+        [Index("{tablename}_uk_phone", "phone", true)]
+        [Index("{tablename}_uk_group_index", "group,index", true)]
+        [Index("{tablename}_uk_group_index22", "group, index22", false)]
         class AddUniquesInfo
         {
             public Guid id { get; set; }
@@ -142,8 +167,8 @@ namespace FreeSql.Tests.ShenTong
         [Fact]
         public void GetComparisonDDLStatements()
         {
-
             var sql = g.shentong.CodeFirst.GetComparisonDDLStatements<TableAllType>();
+            Assert.True(string.IsNullOrEmpty(sql)); //测试运行两次后
             g.shentong.Select<TableAllType>();
         }
 
@@ -216,6 +241,7 @@ namespace FreeSql.Tests.ShenTong
                 //testFieldShortArrayNullable = new short?[] { 1, 2, 3, null, 4, 5 },
                 testFieldShortNullable = short.MinValue,
                 testFieldString = "我是中国人string'\\?!@#$%^&*()_+{}}{~?><<>",
+                testFieldChar = 'X',
                 //testFieldStringArray = new[] { "我是中国人String1", "我是中国人String2", null, "我是中国人String3" },
                 testFieldTimeSpan = TimeSpan.FromHours(10),
                 //testFieldTimeSpanArray = new[] { TimeSpan.FromHours(10), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(60) },
@@ -244,12 +270,15 @@ namespace FreeSql.Tests.ShenTong
             var item3 = insert.AppendData(item2).ExecuteInserted().First();
             var newitem2 = select.Where(a => a.Id == item3.Id).ToOne();
             Assert.Equal(item2.testFieldString, newitem2.testFieldString);
+            Assert.Equal(item2.testFieldChar, newitem2.testFieldChar);
 
             item3 = insert.NoneParameter().AppendData(item2).ExecuteInserted().First();
             newitem2 = select.Where(a => a.Id == item3.Id).ToOne();
             Assert.Equal(item2.testFieldString, newitem2.testFieldString);
+            Assert.Equal(item2.testFieldChar, newitem2.testFieldChar);
 
             var items = select.ToList();
+            var itemstb = select.ToDataTable();
         }
 
         [Table(Name = "tb_alltype")]
@@ -277,6 +306,7 @@ namespace FreeSql.Tests.ShenTong
 
             public byte[] testFieldBytes { get; set; }
             public string testFieldString { get; set; }
+            public char testFieldChar { get; set; }
             public Guid testFieldGuid { get; set; }
 
             public bool? testFieldBoolNullable { get; set; }

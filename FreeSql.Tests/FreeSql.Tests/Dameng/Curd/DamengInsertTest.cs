@@ -177,6 +177,11 @@ INTO ""TB_TOPIC_INSERT""(""CLICKS"") VALUES(900)
 
             Assert.Equal(1, insert.AppendData(items.First()).ExecuteAffrows());
             Assert.Equal(10, insert.AppendData(items).ExecuteAffrows());
+
+            Assert.Equal(10, g.dameng.Select<Topic>().Limit(10).InsertInto(null, a => new Topic
+            {
+                Title = a.Title
+            }));
         }
         [Fact]
         public void ExecuteIdentity()
@@ -194,6 +199,16 @@ INTO ""TB_TOPIC_INSERT""(""CLICKS"") VALUES(900)
 
             //var items2 = insert.AppendData(items).ExecuteInserted();
         }
+
+        //[Fact]
+        //public void ExecuteDmBulkCopy()
+        //{
+        //    var items = new List<Topic>();
+        //    for (var a = 0; a < 10; a++) items.Add(new Topic { Id = a + 1, Title = $"newtitle{a}", Clicks = a * 100, CreateTime = DateTime.Now });
+
+        //    insert.AppendData(items).InsertIdentity().ExecuteDmBulkCopy();
+        //    //Dm.DmException:¡°The fastloading dll not loading!¡±
+        //}
 
         [Fact]
         public void AsTable()
